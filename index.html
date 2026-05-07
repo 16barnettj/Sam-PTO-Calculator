@@ -340,6 +340,39 @@
   }
   .day.non-work .day-num { color: var(--muted); }
 
+  /* Lock screen */
+  .lock-view {
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lock-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+  .lock-card h2 {
+    margin: 0 0 6px;
+    font-size: 22px;
+  }
+  .lock-card p {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .lock-card .field { text-align: left; }
+  .lock-error {
+    color: var(--bad);
+    font-size: 13px;
+    margin-top: 10px;
+    min-height: 18px;
+  }
+
   /* Fatal error banner */
   .error-banner {
     background: var(--bad);
@@ -354,6 +387,19 @@
 </head>
 <body>
 
+<section id="lock-view" class="lock-view" hidden>
+  <div class="lock-card">
+    <h2>Sam PTO Calculator</h2>
+    <p>Enter password to continue</p>
+    <div class="field">
+      <input type="password" id="lock-input" placeholder="Password" autocomplete="off">
+    </div>
+    <button class="btn" id="lock-submit">Unlock</button>
+    <div class="lock-error" id="lock-error"></div>
+  </div>
+</section>
+
+<div id="app-shell" hidden>
 <header>
   <h1>Sam PTO Calculator</h1>
   <button id="settings-btn" class="icon-btn" aria-label="Settings">⚙</button>
@@ -442,6 +488,7 @@
     <p>Loading…</p>
   </div>
 </section>
+</div>
 
 <div id="modal" class="modal-backdrop" hidden>
   <div class="modal" role="dialog" aria-modal="true">
@@ -487,6 +534,8 @@
 <script>
 (() => {
   const STORAGE_KEY = 'pto-tracker-v1';
+  const UNLOCK_KEY = 'pto-unlocked-v1';
+  const PASSWORD_HASH = '297581d6cd198a6e6df740f13288cb13a1e76cebe3f0ebc3fe259977addfd646'; // SHA-256
   const MS_PER_DAY = 86400000;
   const DEFAULT_WORK_DAYS = [2, 3, 4, 5, 6]; // Tue–Sat
 
@@ -817,8 +866,41 @@
     showMain();
   }
 
+  // --- Lock screen ---
+  async function sha256Hex(str) {
+    const buf = new TextEncoder().encode(str);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function isUnlocked() {
+    try { return localStorage.getItem(UNLOCK_KEY) === '1'; } catch (e) { return false; }
+  }
+  function setUnlocked() {
+    try { localStorage.setItem(UNLOCK_KEY, '1'); } catch (e) {}
+  }
+  async function attemptUnlock() {
+    const input = document.getElementById('lock-input');
+    const errEl = document.getElementById('lock-error');
+    errEl.textContent = '';
+    const hash = await sha256Hex(input.value);
+    if (hash === PASSWORD_HASH) {
+      setUnlocked();
+      showApp();
+    } else {
+      errEl.textContent = 'Incorrect password';
+      input.value = '';
+      input.focus();
+    }
+  }
+  function showApp() {
+    document.getElementById('lock-view').hidden = true;
+    document.getElementById('app-shell').hidden = false;
+    runApp();
+  }
+
   // --- Wiring ---
-  function init() {
+  function runApp() {
     const now = new Date();
     viewYear = now.getFullYear();
     viewMonth = now.getMonth();
@@ -883,6 +965,19 @@
     else showSetup(false);
   }
 
+  function bootstrap() {
+    document.getElementById('lock-submit').addEventListener('click', attemptUnlock);
+    document.getElementById('lock-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') attemptUnlock();
+    });
+    if (isUnlocked()) {
+      showApp();
+    } else {
+      document.getElementById('lock-view').hidden = false;
+      document.getElementById('lock-input').focus();
+    }
+  }
+
   function showFatalError(err) {
     const banner = document.createElement('div');
     banner.className = 'error-banner';
@@ -891,7 +986,7 @@
   }
 
   try {
-    init();
+    bootstrap();
   } catch (err) {
     console.error(err);
     showFatalError(err);
