@@ -1,0 +1,13 @@
+# PTO data file (contains personal information)
+pto_data.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# OS
+.DS_Store
+Thumbs.db

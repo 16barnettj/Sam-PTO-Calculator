@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e293b">
+<title>Sam PTO Calculator</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-2: #334155;
+    --border: #475569;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --vacation: #f59e0b;
+    --vacation-bg: rgba(245, 158, 11, 0.18);
+    --today: #38bdf8;
+    --good: #22c55e;
+    --warn: #eab308;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0;
+  }
+  header h1 {
+    font-size: 22px;
+    margin: 0;
+    font-weight: 600;
+  }
+  .icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon-btn:active { background: var(--surface-2); }
+
+  /* Summary cards */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+  }
+  .card-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .card-value {
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .card-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Calendar nav */
+  .cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .cal-nav h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .nav-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .nav-btn:active { background: var(--surface-2); }
+
+  /* Calendar grid */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .dow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    padding: 6px 0;
+    letter-spacing: 0.5px;
+  }
+  .day {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    aspect-ratio: 1 / 1;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.05s ease;
+  }
+  .day:active { transform: scale(0.96); }
+  .day.outside { opacity: 0.3; }
+  .day.today {
+    border-color: var(--today);
+    box-shadow: 0 0 0 1px var(--today);
+  }
+  .day.vacation {
+    background: var(--vacation-bg);
+    border-color: var(--vacation);
+  }
+  .day-num {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .day-balance {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.1;
+  }
+  .day.has-balance .day-balance { color: var(--text); }
+  .day.vacation .day-balance::before {
+    content: "V ";
+    color: var(--vacation);
+    font-weight: 600;
+  }
+  .day.before-start .day-balance { color: var(--muted); opacity: 0.5; }
+
+  /* Setup view */
+  .setup {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .setup h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+  }
+  .setup p {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--muted);
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 16px; /* >=16px prevents iOS zoom on focus */
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .field-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0f172a;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:active { opacity: 0.85; }
+  .btn-secondary {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .btn-danger {
+    background: var(--bad);
+    color: white;
+  }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-row .btn { flex: 1; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 100;
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  @media (min-width: 600px) {
+    .modal-backdrop { align-items: center; }
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 480px;
+    padding: 20px;
+    animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .modal h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+  }
+  .modal .date-sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--muted); }
+  .stat-row .value { font-weight: 600; }
+  .stat-row .value.vac { color: var(--vacation); }
+
+  .vac-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .balance-good { color: var(--good); }
+  .balance-warn { color: var(--warn); }
+  .balance-bad { color: var(--bad); }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+  }
+
+  /* Day-of-week picker */
+  .dow-picker {
+    display: flex;
+    gap: 4px;
+  }
+  .dow-picker button {
+    flex: 1;
+    padding: 10px 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dow-picker button.active {
+    background: var(--accent);
+    color: #0f172a;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .dow-picker button:active { opacity: 0.85; }
+
+  /* Non-work day in calendar */
+  .day.non-work {
+    background: transparent;
+    border-style: dashed;
+  }
+  .day.non-work .day-num { color: var(--muted); }
+
+  /* Fatal error banner */
+  .error-banner {
+    background: var(--bad);
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 16px 0;
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sam PTO Calculator</h1>
+  <button id="settings-btn" class="icon-btn" aria-label="Settings">⚙</button>
+</header>
+
+<section id="setup-view" hidden>
+  <div class="setup">
+    <h2 id="setup-title">Welcome</h2>
+    <p id="setup-subtitle">Let's set up your PTO tracking. You can change these later.</p>
+    <div class="field">
+      <label for="start-date">Start date (when you began accruing PTO)</label>
+      <input type="date" id="start-date">
+    </div>
+    <div class="field">
+      <label for="hours-week">Hours worked per week</label>
+      <input type="number" id="hours-week" step="0.5" min="0" placeholder="40">
+    </div>
+    <div class="field">
+      <label>Work schedule (tap days you work)</label>
+      <div class="dow-picker" id="dow-picker">
+        <button type="button" data-dow="0">Sun</button>
+        <button type="button" data-dow="1">Mon</button>
+        <button type="button" data-dow="2">Tue</button>
+        <button type="button" data-dow="3">Wed</button>
+        <button type="button" data-dow="4">Thu</button>
+        <button type="button" data-dow="5">Fri</button>
+        <button type="button" data-dow="6">Sat</button>
+      </div>
+      <div class="field-hint">PTO accrues on these days only.</div>
+    </div>
+    <div class="field">
+      <label for="accrual-preset">Accrual rate</label>
+      <select id="accrual-preset">
+        <option value="0.0385">2 weeks/year (80 hrs) — 0.0385</option>
+        <option value="0.0577" selected>3 weeks/year (120 hrs) — 0.0577</option>
+        <option value="0.0769">4 weeks/year (160 hrs) — 0.0769</option>
+        <option value="0.0923">Innova — 0.0923</option>
+        <option value="0.0962">5 weeks/year (200 hrs) — 0.0962</option>
+        <option value="custom">Custom…</option>
+      </select>
+      <input type="number" id="accrual-custom" step="0.0001" min="0" placeholder="PTO hours per hour worked" style="margin-top:8px; display:none;">
+      <div class="field-hint">PTO hours earned per hour worked.</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="setup-cancel" hidden>Cancel</button>
+      <button class="btn" id="setup-save">Save</button>
+    </div>
+  </div>
+  <div class="setup" id="reset-section" hidden>
+    <h2>Danger zone</h2>
+    <p>Permanently delete all data (settings + vacation days).</p>
+    <button class="btn btn-danger" id="reset-btn">Reset all data</button>
+  </div>
+</section>
+
+<section id="main-view" hidden>
+  <div class="summary">
+    <div class="card">
+      <div class="card-label">Current</div>
+      <div class="card-value" id="sum-current">--</div>
+      <div class="card-sub" id="sum-current-days">-- days</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Accrued</div>
+      <div class="card-value" id="sum-accrued">--</div>
+      <div class="card-sub" id="sum-accrued-days">-- days</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Used</div>
+      <div class="card-value" id="sum-used">--</div>
+      <div class="card-sub" id="sum-used-days">-- days</div>
+    </div>
+  </div>
+
+  <div class="cal-nav">
+    <button class="nav-btn" id="prev-month" aria-label="Previous month">‹</button>
+    <h2 id="month-label"></h2>
+    <button class="nav-btn" id="next-month" aria-label="Next month">›</button>
+  </div>
+
+  <div class="cal-grid" id="cal-grid"></div>
+</section>
+
+<section id="empty-view" hidden>
+  <div class="empty">
+    <p>Loading…</p>
+  </div>
+</section>
+
+<div id="modal" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="modal-title"></h3>
+    <div class="date-sub" id="modal-sub"></div>
+
+    <div class="stat-row">
+      <span class="label">Balance end of day</span>
+      <span class="value" id="modal-balance">--</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Accrued (lifetime)</span>
+      <span class="value" id="modal-accrued">--</span>
+    </div>
+    <div class="stat-row">
+      <span class="label">Used (lifetime)</span>
+      <span class="value" id="modal-used">--</span>
+    </div>
+    <div class="stat-row" id="modal-vac-row" hidden>
+      <span class="label">Vacation this day</span>
+      <span class="value vac" id="modal-vac-hours">--</span>
+    </div>
+
+    <div class="vac-section">
+      <div id="vac-add-section">
+        <div class="field">
+          <label for="vac-hours">Add vacation on this day (hours)</label>
+          <input type="number" id="vac-hours" step="0.5" min="0.5" value="8">
+        </div>
+        <button class="btn" id="vac-add-btn">Add vacation</button>
+      </div>
+      <div id="vac-remove-section" hidden>
+        <button class="btn btn-danger" id="vac-remove-btn">Remove vacation</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button class="btn btn-secondary" id="modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'pto-tracker-v1';
+  const MS_PER_DAY = 86400000;
+  const DEFAULT_WORK_DAYS = [2, 3, 4, 5, 6]; // Tue–Sat
+
+  let data = loadData();
+  let viewYear, viewMonth; // month is 0-indexed
+  let modalDateISO = null;
+
+  function loadData() {
+    let parsed = null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) parsed = JSON.parse(raw);
+    } catch (e) {}
+    const d = parsed || {};
+    return {
+      startDate: d.startDate || null,
+      hoursPerWeek: d.hoursPerWeek || null,
+      accrualRate: d.accrualRate || null,
+      workDays: Array.isArray(d.workDays) && d.workDays.length > 0
+        ? d.workDays.slice().sort((a, b) => a - b)
+        : DEFAULT_WORK_DAYS.slice(),
+      vacationDays: Array.isArray(d.vacationDays)
+        ? d.vacationDays.filter(v => v && typeof v.date === 'string' && typeof v.hours === 'number' && v.hours > 0)
+        : []
+    };
+  }
+
+  function saveData() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      alert('Could not save data: ' + e.message);
+    }
+  }
+
+  function isConfigured() {
+    return !!(data.startDate && data.hoursPerWeek && data.accrualRate
+              && Array.isArray(data.workDays) && data.workDays.length > 0);
+  }
+
+  // --- Date helpers ---
+  function toISO(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  function parseISO(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function daysBetween(a, b) {
+    // Inclusive of zero, exclusive of negative
+    const ms = parseISO(b) - parseISO(a);
+    return Math.floor(ms / MS_PER_DAY);
+  }
+  function todayISO() {
+    return toISO(new Date());
+  }
+
+  // --- Calculation ---
+  // Count workdays in [startISO, endISO) — start inclusive, end exclusive.
+  function workDaysBetween(startISO, endISO) {
+    const start = parseISO(startISO);
+    const end = parseISO(endISO);
+    const dayDiff = Math.round((end - start) / MS_PER_DAY);
+    if (dayDiff <= 0) return 0;
+    const workSet = data.workDays;
+    const fullWeeks = Math.floor(dayDiff / 7);
+    let count = fullWeeks * workSet.length;
+    const remainder = dayDiff % 7;
+    const startDow = start.getDay();
+    for (let i = 0; i < remainder; i++) {
+      const dow = (startDow + i) % 7;
+      if (workSet.includes(dow)) count++;
+    }
+    return count;
+  }
+
+  // Balance "as of end of dateISO"
+  function accruedOn(dateISO) {
+    if (!isConfigured()) return 0;
+    if (dateISO < data.startDate) return 0;
+    const wd = workDaysBetween(data.startDate, dateISO);
+    if (wd <= 0) return 0;
+    const hoursPerWorkday = data.hoursPerWeek / data.workDays.length;
+    return wd * hoursPerWorkday * data.accrualRate;
+  }
+  function balanceOn(dateISO) {
+    return accruedOn(dateISO) - usedOn(dateISO);
+  }
+  function usedOn(dateISO) {
+    let used = 0;
+    for (const v of data.vacationDays) {
+      if (v.date <= dateISO) used += v.hours;
+    }
+    return used;
+  }
+  function vacationOnDay(dateISO) {
+    return data.vacationDays.filter(v => v.date === dateISO);
+  }
+  function isWorkDay(dateISO) {
+    return data.workDays.includes(parseISO(dateISO).getDay());
+  }
+
+  // --- Rendering ---
+  function fmtHours(h) {
+    return `${h.toFixed(1)}h`;
+  }
+  function fmtDays(h) {
+    return `${(h / 8).toFixed(1)} days`;
+  }
+  function fmtWholeDays(h) {
+    return `${Math.floor(h / 8)} days`;
+  }
+  function balanceClass(h) {
+    if (h < 0) return 'balance-bad';
+    if (h < 16) return 'balance-warn';
+    return 'balance-good';
+  }
+
+  function renderSummary() {
+    const today = todayISO();
+    const cur = balanceOn(today);
+    const acc = accruedOn(today);
+    const used = usedOn(today);
+
+    const curEl = document.getElementById('sum-current');
+    curEl.textContent = fmtHours(cur);
+    curEl.className = 'card-value ' + balanceClass(cur);
+
+    document.getElementById('sum-current-days').textContent = fmtDays(cur);
+    document.getElementById('sum-accrued').textContent = fmtHours(acc);
+    document.getElementById('sum-accrued-days').textContent = fmtWholeDays(acc);
+    document.getElementById('sum-used').textContent = fmtHours(used);
+    document.getElementById('sum-used-days').textContent = fmtDays(used);
+  }
+
+  function renderCalendar() {
+    const monthLabel = document.getElementById('month-label');
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+
+    const monthName = new Date(viewYear, viewMonth, 1).toLocaleString(undefined, {
+      month: 'long', year: 'numeric'
+    });
+    monthLabel.textContent = monthName;
+
+    const dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (const d of dows) {
+      const el = document.createElement('div');
+      el.className = 'dow';
+      el.textContent = d;
+      grid.appendChild(el);
+    }
+
+    const firstOfMonth = new Date(viewYear, viewMonth, 1);
+    const startWeekday = firstOfMonth.getDay(); // 0=Sun
+    const lastOfMonth = new Date(viewYear, viewMonth + 1, 0);
+    const daysInMonth = lastOfMonth.getDate();
+
+    // Cells before first of month
+    const prevMonthLast = new Date(viewYear, viewMonth, 0).getDate();
+    for (let i = startWeekday - 1; i >= 0; i--) {
+      const d = new Date(viewYear, viewMonth - 1, prevMonthLast - i);
+      grid.appendChild(makeDayCell(d, true));
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(viewYear, viewMonth, day);
+      grid.appendChild(makeDayCell(d, false));
+    }
+    // Trailing cells to fill last row (so grid is tidy)
+    const totalSoFar = startWeekday + daysInMonth;
+    const trailing = (7 - (totalSoFar % 7)) % 7;
+    for (let i = 1; i <= trailing; i++) {
+      const d = new Date(viewYear, viewMonth + 1, i);
+      grid.appendChild(makeDayCell(d, true));
+    }
+  }
+
+  function makeDayCell(d, isOutside) {
+    const iso = toISO(d);
+    const cell = document.createElement('div');
+    cell.className = 'day';
+    if (isOutside) cell.classList.add('outside');
+    if (iso === todayISO()) cell.classList.add('today');
+
+    const vacs = vacationOnDay(iso);
+    if (vacs.length > 0) cell.classList.add('vacation');
+
+    const beforeStart = data.startDate && iso < data.startDate;
+    if (beforeStart) cell.classList.add('before-start');
+    else cell.classList.add('has-balance');
+
+    if (!isWorkDay(iso) && vacs.length === 0) cell.classList.add('non-work');
+
+    const numEl = document.createElement('div');
+    numEl.className = 'day-num';
+    numEl.textContent = d.getDate();
+
+    const balEl = document.createElement('div');
+    balEl.className = 'day-balance';
+    if (beforeStart) {
+      balEl.textContent = '—';
+    } else if (isConfigured()) {
+      const bal = balanceOn(iso);
+      balEl.textContent = `${bal.toFixed(1)}hr - ${Math.floor(bal / 8)}d`;
+    } else {
+      balEl.textContent = '';
+    }
+
+    cell.appendChild(numEl);
+    cell.appendChild(balEl);
+
+    cell.addEventListener('click', () => openModal(iso));
+    return cell;
+  }
+
+  // --- Modal ---
+  function openModal(iso) {
+    modalDateISO = iso;
+    const d = parseISO(iso);
+    document.getElementById('modal-title').textContent = d.toLocaleDateString(undefined, {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+    });
+
+    const beforeStart = data.startDate && iso < data.startDate;
+    const sub = document.getElementById('modal-sub');
+    if (beforeStart) sub.textContent = 'Before your start date';
+    else if (iso > todayISO()) sub.textContent = 'Projected (future date)';
+    else if (iso === todayISO()) sub.textContent = 'Today';
+    else sub.textContent = 'Past date';
+
+    const bal = balanceOn(iso);
+    const balEl = document.getElementById('modal-balance');
+    balEl.textContent = beforeStart ? '—' : fmtHours(bal);
+    balEl.className = 'value ' + (beforeStart ? '' : balanceClass(bal));
+
+    document.getElementById('modal-accrued').textContent = beforeStart ? '—' : fmtHours(accruedOn(iso));
+    document.getElementById('modal-used').textContent = beforeStart ? '—' : fmtHours(usedOn(iso));
+
+    const vacs = vacationOnDay(iso);
+    const vacRow = document.getElementById('modal-vac-row');
+    if (vacs.length > 0) {
+      const total = vacs.reduce((s, v) => s + v.hours, 0);
+      document.getElementById('modal-vac-hours').textContent = fmtHours(total);
+      vacRow.hidden = false;
+      document.getElementById('vac-add-section').hidden = true;
+      document.getElementById('vac-remove-section').hidden = false;
+    } else {
+      vacRow.hidden = true;
+      document.getElementById('vac-add-section').hidden = false;
+      document.getElementById('vac-remove-section').hidden = true;
+    }
+
+    document.getElementById('modal').hidden = false;
+  }
+  function closeModal() {
+    document.getElementById('modal').hidden = true;
+    modalDateISO = null;
+  }
+
+  // --- Setup view ---
+  function showSetup(isReconfigure) {
+    document.getElementById('main-view').hidden = true;
+    document.getElementById('setup-view').hidden = false;
+    document.getElementById('setup-title').textContent = isReconfigure ? 'Settings' : 'Welcome';
+    document.getElementById('setup-subtitle').textContent = isReconfigure
+      ? 'Update your PTO settings.'
+      : "Let's set up your PTO tracking. You can change these later.";
+    document.getElementById('setup-cancel').hidden = !isReconfigure;
+    document.getElementById('reset-section').hidden = !isReconfigure;
+
+    document.getElementById('start-date').value = data.startDate || '';
+    document.getElementById('hours-week').value = data.hoursPerWeek || '';
+
+    const activeDays = (Array.isArray(data.workDays) && data.workDays.length > 0)
+      ? data.workDays
+      : DEFAULT_WORK_DAYS;
+    document.querySelectorAll('#dow-picker button').forEach(btn => {
+      const dow = parseInt(btn.dataset.dow, 10);
+      btn.classList.toggle('active', activeDays.includes(dow));
+    });
+
+    const preset = document.getElementById('accrual-preset');
+    const custom = document.getElementById('accrual-custom');
+    if (data.accrualRate) {
+      const presets = ['0.0385', '0.0577', '0.0769', '0.0923', '0.0962'];
+      const matched = presets.find(p => Math.abs(parseFloat(p) - data.accrualRate) < 0.0001);
+      if (matched) {
+        preset.value = matched;
+        custom.style.display = 'none';
+        custom.value = '';
+      } else {
+        preset.value = 'custom';
+        custom.style.display = 'block';
+        custom.value = data.accrualRate;
+      }
+    }
+  }
+  function showMain() {
+    document.getElementById('setup-view').hidden = true;
+    document.getElementById('main-view').hidden = false;
+    renderSummary();
+    renderCalendar();
+  }
+
+  function attemptSaveSetup() {
+    const startDate = document.getElementById('start-date').value;
+    const hoursPerWeek = parseFloat(document.getElementById('hours-week').value);
+    const presetVal = document.getElementById('accrual-preset').value;
+    const customVal = parseFloat(document.getElementById('accrual-custom').value);
+    const accrualRate = presetVal === 'custom' ? customVal : parseFloat(presetVal);
+    const workDays = Array.from(document.querySelectorAll('#dow-picker button.active'))
+      .map(b => parseInt(b.dataset.dow, 10))
+      .sort((a, b) => a - b);
+
+    if (!startDate) { alert('Please choose a start date.'); return; }
+    if (!hoursPerWeek || hoursPerWeek <= 0) { alert('Hours per week must be greater than 0.'); return; }
+    if (!accrualRate || accrualRate <= 0) { alert('Accrual rate must be greater than 0.'); return; }
+    if (workDays.length === 0) { alert('Select at least one work day.'); return; }
+
+    data.startDate = startDate;
+    data.hoursPerWeek = hoursPerWeek;
+    data.accrualRate = accrualRate;
+    data.workDays = workDays;
+    saveData();
+    showMain();
+  }
+
+  // --- Wiring ---
+  function init() {
+    const now = new Date();
+    viewYear = now.getFullYear();
+    viewMonth = now.getMonth();
+
+    document.getElementById('settings-btn').addEventListener('click', () => {
+      if (isConfigured()) showSetup(true);
+      else showSetup(false);
+    });
+    document.getElementById('setup-save').addEventListener('click', attemptSaveSetup);
+    document.getElementById('setup-cancel').addEventListener('click', showMain);
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      if (confirm('Delete all PTO data? This cannot be undone.')) {
+        localStorage.removeItem(STORAGE_KEY);
+        data = loadData();
+        showSetup(false);
+      }
+    });
+    document.getElementById('accrual-preset').addEventListener('change', (e) => {
+      const custom = document.getElementById('accrual-custom');
+      custom.style.display = e.target.value === 'custom' ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('#dow-picker button').forEach(btn => {
+      btn.addEventListener('click', () => btn.classList.toggle('active'));
+    });
+
+    document.getElementById('prev-month').addEventListener('click', () => {
+      viewMonth--;
+      if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+      renderCalendar();
+    });
+    document.getElementById('next-month').addEventListener('click', () => {
+      viewMonth++;
+      if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+      renderCalendar();
+    });
+
+    document.getElementById('modal-close').addEventListener('click', closeModal);
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target.id === 'modal') closeModal();
+    });
+    document.getElementById('vac-add-btn').addEventListener('click', () => {
+      if (!modalDateISO) return;
+      const hours = parseFloat(document.getElementById('vac-hours').value);
+      if (!hours || hours <= 0) { alert('Hours must be greater than 0.'); return; }
+      data.vacationDays.push({ date: modalDateISO, hours });
+      data.vacationDays.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      saveData();
+      renderSummary();
+      renderCalendar();
+      openModal(modalDateISO);
+    });
+    document.getElementById('vac-remove-btn').addEventListener('click', () => {
+      data.vacationDays = data.vacationDays.filter(v => v.date !== modalDateISO);
+      saveData();
+      renderSummary();
+      renderCalendar();
+      openModal(modalDateISO);
+    });
+
+    if (isConfigured()) showMain();
+    else showSetup(false);
+  }
+
+  function showFatalError(err) {
+    const banner = document.createElement('div');
+    banner.className = 'error-banner';
+    banner.textContent = 'PTO Tracker failed to load:\n' + (err && err.stack ? err.stack : err);
+    document.body.appendChild(banner);
+  }
+
+  try {
+    init();
+  } catch (err) {
+    console.error(err);
+    showFatalError(err);
+  }
+  window.addEventListener('error', (e) => {
+    console.error(e.error || e.message);
+    showFatalError(e.error || e.message);
+  });
+})();
+</script>
+</body>
+</html>
