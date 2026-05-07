@@ -340,6 +340,13 @@
   }
   .day.non-work .day-num { color: var(--muted); }
 
+  /* Holiday */
+  .day.holiday {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: #a855f7;
+  }
+  .day.holiday .day-num { color: #c084fc; }
+
   /* Lock screen */
   .lock-view {
     min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -596,6 +603,53 @@
     return toISO(new Date());
   }
 
+  // --- Holidays ---
+  function nthDowOfMonth(year, month, dow, n) {
+    // month: 0-indexed; dow: 0=Sun..6=Sat; n: 1-based
+    const first = new Date(year, month, 1);
+    const offset = (dow - first.getDay() + 7) % 7;
+    return new Date(year, month, 1 + offset + (n - 1) * 7);
+  }
+  function lastDowOfMonth(year, month, dow) {
+    const last = new Date(year, month + 1, 0);
+    const offset = (last.getDay() - dow + 7) % 7;
+    return new Date(year, month, last.getDate() - offset);
+  }
+  const _holidayCache = new Map();
+  function getHolidays(year) {
+    if (_holidayCache.has(year)) return _holidayCache.get(year);
+    const list = [
+      { name: "New Year's Day",      date: toISO(new Date(year, 0, 1)) },
+      { name: "MLK Day",             date: toISO(nthDowOfMonth(year, 0, 1, 3)) },
+      { name: "Memorial Day",        date: toISO(lastDowOfMonth(year, 4, 1)) },
+      { name: "Independence Day",    date: toISO(new Date(year, 6, 4)) },
+      { name: "Labor Day",           date: toISO(nthDowOfMonth(year, 8, 1, 1)) },
+      { name: "Thanksgiving Day",    date: toISO(nthDowOfMonth(year, 10, 4, 4)) },
+      { name: "Christmas Day",       date: toISO(new Date(year, 11, 25)) },
+    ];
+    _holidayCache.set(year, list);
+    return list;
+  }
+  function getHolidayName(dateISO) {
+    const year = parseInt(dateISO.slice(0, 4), 10);
+    const h = getHolidays(year).find(h => h.date === dateISO);
+    return h ? h.name : null;
+  }
+  function isHoliday(dateISO) {
+    return getHolidayName(dateISO) !== null;
+  }
+  function getHolidaysInRange(startISO, endISO) {
+    const startYear = parseInt(startISO.slice(0, 4), 10);
+    const endYear = parseInt(endISO.slice(0, 4), 10);
+    const out = [];
+    for (let y = startYear; y <= endYear; y++) {
+      for (const h of getHolidays(y)) {
+        if (h.date >= startISO && h.date < endISO) out.push(h);
+      }
+    }
+    return out;
+  }
+
   // --- Calculation ---
   // Count workdays in [startISO, endISO) — start inclusive, end exclusive.
   function workDaysBetween(startISO, endISO) {
@@ -616,8 +670,9 @@
   }
 
   // Balance "as of end of dateISO"
-  // Accrual is based on hours actually worked, so vacation hours on a workday
-  // reduce that day's accrual (capped at the day's scheduled hours).
+  // Accrual is based on hours actually worked. Holidays on workdays zero out
+  // that day's accrual (no PTO spent). Vacation hours on workdays reduce the
+  // remaining day's accrual (capped at scheduled hours).
   function accruedOn(dateISO) {
     if (!isConfigured()) return 0;
     if (dateISO < data.startDate) return 0;
@@ -626,9 +681,17 @@
     const hoursPerWorkday = data.hoursPerWeek / data.workDays.length;
     const scheduledHours = wd * hoursPerWorkday;
 
+    // Holidays that land on workdays in range — full reduction
+    const holidayWorkdays = getHolidaysInRange(data.startDate, dateISO)
+      .filter(h => isWorkDay(h.date));
+    const holidaySet = new Set(holidayWorkdays.map(h => h.date));
+    const holidayReduction = holidayWorkdays.length * hoursPerWorkday;
+
+    // Vacation reduction, but skip days already fully reduced by a holiday
     const vacByDay = new Map();
     for (const v of data.vacationDays) {
-      if (v.date >= data.startDate && v.date < dateISO && isWorkDay(v.date)) {
+      if (v.date >= data.startDate && v.date < dateISO
+          && isWorkDay(v.date) && !holidaySet.has(v.date)) {
         vacByDay.set(v.date, (vacByDay.get(v.date) || 0) + v.hours);
       }
     }
@@ -637,7 +700,7 @@
       vacReduction += Math.min(hours, hoursPerWorkday);
     }
 
-    const workedHours = Math.max(0, scheduledHours - vacReduction);
+    const workedHours = Math.max(0, scheduledHours - holidayReduction - vacReduction);
     return workedHours * data.accrualRate;
   }
   function balanceOn(dateISO) {
@@ -747,6 +810,7 @@
     else cell.classList.add('has-balance');
 
     if (!isWorkDay(iso) && vacs.length === 0) cell.classList.add('non-work');
+    if (isHoliday(iso) && vacs.length === 0) cell.classList.add('holiday');
 
     const numEl = document.createElement('div');
     numEl.className = 'day-num';
@@ -780,10 +844,14 @@
 
     const beforeStart = data.startDate && iso < data.startDate;
     const sub = document.getElementById('modal-sub');
-    if (beforeStart) sub.textContent = 'Before your start date';
-    else if (iso > todayISO()) sub.textContent = 'Projected (future date)';
-    else if (iso === todayISO()) sub.textContent = 'Today';
-    else sub.textContent = 'Past date';
+    const holidayName = getHolidayName(iso);
+    let subText;
+    if (beforeStart) subText = 'Before your start date';
+    else if (iso > todayISO()) subText = 'Projected (future date)';
+    else if (iso === todayISO()) subText = 'Today';
+    else subText = 'Past date';
+    if (holidayName) subText += ` · Holiday: ${holidayName}`;
+    sub.textContent = subText;
 
     const bal = balanceOn(iso);
     const balEl = document.getElementById('modal-balance');
