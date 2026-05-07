@@ -616,13 +616,29 @@
   }
 
   // Balance "as of end of dateISO"
+  // Accrual is based on hours actually worked, so vacation hours on a workday
+  // reduce that day's accrual (capped at the day's scheduled hours).
   function accruedOn(dateISO) {
     if (!isConfigured()) return 0;
     if (dateISO < data.startDate) return 0;
     const wd = workDaysBetween(data.startDate, dateISO);
     if (wd <= 0) return 0;
     const hoursPerWorkday = data.hoursPerWeek / data.workDays.length;
-    return wd * hoursPerWorkday * data.accrualRate;
+    const scheduledHours = wd * hoursPerWorkday;
+
+    const vacByDay = new Map();
+    for (const v of data.vacationDays) {
+      if (v.date >= data.startDate && v.date < dateISO && isWorkDay(v.date)) {
+        vacByDay.set(v.date, (vacByDay.get(v.date) || 0) + v.hours);
+      }
+    }
+    let vacReduction = 0;
+    for (const hours of vacByDay.values()) {
+      vacReduction += Math.min(hours, hoursPerWorkday);
+    }
+
+    const workedHours = Math.max(0, scheduledHours - vacReduction);
+    return workedHours * data.accrualRate;
   }
   function balanceOn(dateISO) {
     return accruedOn(dateISO) - usedOn(dateISO);
